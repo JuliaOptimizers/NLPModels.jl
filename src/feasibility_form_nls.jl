@@ -92,6 +92,33 @@ function FeasibilityFormNLS(nls :: FeasibilityResidual; name="$(nls.meta.name)-f
   return nlp
 end
 
+function FeasibilityFormNLS(nls :: LLS; name="$(nls.meta.name)-ffnls") where LLS <: AbstractLLSModel
+  nequ = nls.nls_meta.nequ
+  meta = nls.meta
+  nvar = meta.nvar + nequ
+  ncon = meta.ncon + nequ
+  nnzh = nls.nls_meta.nnzh + nequ
+  meta = NLPModelMeta(nvar, x0=[meta.x0; zeros(nequ)],
+                      lvar=[meta.lvar; fill(-Inf, nequ)],
+                      uvar=[meta.uvar; fill( Inf, nequ)],
+                      ncon=ncon,
+                      lcon=[zeros(nequ); meta.lcon],
+                      ucon=[zeros(nequ); meta.ucon],
+                      y0=[zeros(nequ); meta.y0],
+                      lin=[nls.nls_meta.lin; meta.lin .+ nequ],
+                      nln=[nls.nls_meta.nln; meta.nln .+ nequ],
+                      nnzj=meta.nnzj + nls.nls_meta.nnzj + nequ,
+                      nnzh=nnzh,
+                      name=name
+                     )
+  nls_meta = NLSMeta(nequ, nvar, x0=[meta.x0; zeros(nequ)], nnzj=nequ, nnzh=0, lin=1:nequ, nln=Int[])
+
+  nlp = FeasibilityFormNLS{typeof(nls)}(meta, nls_meta, nls, NLSCounters())
+  finalizer(nlp -> finalize(nlp.internal), nlp)
+
+  return nlp
+end
+
 function obj(nlp :: FeasibilityFormNLS, x :: AbstractVector)
   @lencheck nlp.meta.nvar x
   increment!(nlp, :neval_obj)
@@ -213,7 +240,7 @@ function hess_structure!(nlp :: FeasibilityFormNLS, rows :: AbstractVector{<: In
   return rows, cols
 end
 
-function hess_structure!(nlp :: FeasibilityFormNLS{LLSModel}, rows :: AbstractVector{<: Integer}, cols :: AbstractVector{<: Integer})
+function hess_structure!(nlp :: FeasibilityFormNLS{<: AbstractLLSModel}, rows :: AbstractVector{<: Integer}, cols :: AbstractVector{<: Integer})
   @lencheck nlp.meta.nnzh rows cols
   n, ne = nlp.internal.meta.nvar, nlp.internal.nls_meta.nequ
   rows .= n+1:n+ne
@@ -243,7 +270,7 @@ function hess_coord!(nlp :: FeasibilityFormNLS, xr :: AbstractVector, y :: Abstr
   return vals
 end
 
-function hess_coord!(nlp :: FeasibilityFormNLS{LLSModel}, xr :: AbstractVector, y :: AbstractVector, vals :: AbstractVector;
+function hess_coord!(nlp :: FeasibilityFormNLS{<: AbstractLLSModel}, xr :: AbstractVector, y :: AbstractVector, vals :: AbstractVector;
                      obj_weight :: Float64=1.0)
   @lencheck nlp.meta.nvar xr
   @lencheck nlp.meta.ncon y

@@ -129,8 +129,8 @@ for problem in nls_problems
     check_nlp_dimensions(nls, exclude_hess=true)
   end
 
-  # LLSModel returns the internal A for jac, hence it doesn't respect type input
-  idx = findall(typeof.(nlss) .== LLSModel)
+  # AbstractLLSModels returns the internal A for jac, hence it doesn't respect type input
+  idx = findall([typeof(nls) <: AbstractLLSModel for nls in nlss])
   if length(idx) > 0
     deleteat!(nlss, idx)
   end
